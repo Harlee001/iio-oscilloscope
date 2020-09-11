@@ -87,7 +87,6 @@ static GtkTextBuffer *calib_buffer;
 static GtkTextBuffer *vsensor_buf;
 static GtkTextBuffer *vshift_buf;
 
-static gboolean found_voltage_mon = FALSE;
 static gboolean plugin_detached;
 static gint this_page;
 
@@ -147,25 +146,25 @@ static void monitor_fda_mode(GtkCheckButton *btn)
 				 "FULL POWER" : "LOW POWER", -1);
 }
 
-static gboolean update_voltages(void)
+static gboolean update_voltages(struct iio_device *voltage_mon)
 {
 	double scale, result;
 	char voltage[10];
 	long long raw;
 	int idx;
 
-	if (found_voltage_mon){
-		for(idx = 0; idx < NUM_ANALOG_PINS; idx++) {
-			iio_channel_attr_read_longlong(analog_in[idx], "raw",
-						       &raw);
-			iio_channel_attr_read_double(analog_in[idx], "scale",
-			 			     &scale);
-			result = raw * scale * XADC_VREF;
-			snprintf(voltage, sizeof(voltage), "%.2f", result);
-			gtk_text_buffer_set_text(voltage_buffer[idx], voltage,
-						 -1);
-		}
-	}
+    for(idx = 0; idx < NUM_ANALOG_PINS; idx++) {
+        iio_channel_attr_read_longlong(analog_in[idx], "raw",
+                           &raw);
+        iio_channel_attr_read_double(analog_in[idx], "scale",
+                         &scale);
+        result = raw * scale;
+        if(!strcmp(iio_device_get_name(voltage_mon),VOLTAGE_MONITOR_1))
+            result *= XADC_VREF;
+        snprintf(voltage, sizeof(voltage), "%.2f", result);
+        gtk_text_buffer_set_text(voltage_buffer[idx], voltage,
+                     -1);
+    }
 
 	return TRUE;
 }
@@ -360,12 +359,10 @@ static GtkWidget *cn0540_init(struct osc_plugin *plugin, GtkWidget *notebook,
 	if (!voltage_mon)
 		voltage_mon = iio_context_find_device(ctx, VOLTAGE_MONITOR_2);
 
-	if (!adc || !dac) {
+    if (!adc || !dac || !gpio || !voltage_mon) {
 		printf("Could not find expected iio devices\n");
 		return NULL;
-	}
-	if(voltage_mon)
-		found_voltage_mon = TRUE;
+    }
 
 	adc_ch = iio_device_find_channel(adc, "voltage0", false);
 	dac_ch = iio_device_find_channel(dac, "voltage0", true);
@@ -384,15 +381,19 @@ static GtkWidget *cn0540_init(struct osc_plugin *plugin, GtkWidget *notebook,
 		} else
 			break;
 	}
-	if (found_voltage_mon){
-		label = strdup("voltage9");
-		for(idx = 0; idx < NUM_ANALOG_PINS; idx++) {
-			analog_in[idx] = iio_device_find_channel(voltage_mon, label, FALSE);
-			label[strlen(label) - 1]++;
-			if (label[7] == ':')
-				label = strdup("voltage10");
-		}
-	}
+
+    if(!strcmp(iio_device_get_name(voltage_mon),VOLTAGE_MONITOR_1)){
+        label = strdup("voltage9");
+    } else {
+        label = strdup("voltage0");
+    }
+    for(idx = 0; idx < NUM_ANALOG_PINS; idx++) {
+        analog_in[idx] = iio_device_find_channel(voltage_mon, label, FALSE);
+        label[strlen(label) - 1]++;
+        if (label[7] == ':')
+            label = strdup("voltage10");
+    }
+
 
 	iio_channel_attr_write_longlong(dac_ch, "raw", DAC_DEFAULT_VAL);
 
@@ -495,9 +496,7 @@ static GtkWidget *cn0540_init(struct osc_plugin *plugin, GtkWidget *notebook,
 	gtk_toggle_button_toggled(&tgbtn_fda_mode->toggle_button);
 	gtk_button_clicked(btn_get_sw_ff);
 
-	if (found_voltage_mon){
-		g_timeout_add_seconds(1, (GSourceFunc)update_voltages, NULL);
-	}
+    g_timeout_add_seconds(1, (GSourceFunc)update_voltages, voltage_mon);
 
 	return cn0540_panel;
 }
