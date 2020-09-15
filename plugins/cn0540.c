@@ -117,8 +117,8 @@ static void cn0540_set_gpio_state(const char* gpio_name, gboolean state)
 
 static void monitor_shutdown(GtkCheckButton *btn)
 {
-	cn0540_set_gpio_state("cn0540_set_gpio_state",
-			      btn->toggle_button.active);
+    cn0540_set_gpio_state("cn0540_shutdown_gpio",
+                  btn->toggle_button.active);
 	gtk_text_buffer_set_text(shutdown_buffer, btn->toggle_button.active ?
 				 "ENABLED" : "DISABLED", -1);
 }
@@ -488,7 +488,7 @@ static GtkWidget *cn0540_init(struct osc_plugin *plugin, GtkWidget *notebook,
 	g_signal_connect(G_OBJECT(readvsensor_btn),"clicked",
 			 G_CALLBACK(read_vsensor),NULL);
 
-	gtk_toggle_button_set_active(&tgbtn_shutdown->toggle_button,FALSE);
+    gtk_toggle_button_set_active(&tgbtn_shutdown->toggle_button,FALSE);
 	gtk_toggle_button_set_active(&tgbtn_fda->toggle_button,TRUE);
 	gtk_toggle_button_set_active(&tgbtn_fda_mode->toggle_button,TRUE);
 	gtk_toggle_button_toggled(&tgbtn_shutdown->toggle_button);
